@@ -4,6 +4,7 @@ import os
 from dotenv import load_dotenv
 import random
 import logging
+from sentiment_model import SentimentAnalyzer
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -34,6 +35,9 @@ def simple_sentiment_score():
     """Returns either -1 or 1 randomly for testing purposes"""
     return random.choice([-1, 1])
 
+# Initialize sentiment analyzer
+sentiment_analyzer = SentimentAnalyzer()
+
 @app.route('/analyze', methods=['POST'])
 def analyze_tweets():
     try:
@@ -46,8 +50,8 @@ def analyze_tweets():
         
         for tweet in tweets:
             logger.info(f"Processing tweet: {tweet}")
-            # Generate simple sentiment score (-1 or 1)
-            sentiment_score = simple_sentiment_score()
+            # Use model to predict sentiment
+            sentiment_score = sentiment_analyzer.predict_sentiment(tweet)
             results[tweet] = sentiment_score
             
             # Store in database
@@ -86,11 +90,19 @@ def get_tweets():
         logger.error(f"Error fetching tweets: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+# Create models directory if it doesn't exist
+if not os.path.exists('models'):
+    os.makedirs('models')
+
 # Create tables on startup
 with app.app_context():
     logger.info("Creating database tables...")
     db.create_all()
     logger.info("Database tables created successfully")
+    # Load existing model or train new one if necessary
+    if not sentiment_analyzer.load_model():
+        logger.info("Training new model...")
+        sentiment_analyzer.train_model(db.session, Tweet)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True) 
