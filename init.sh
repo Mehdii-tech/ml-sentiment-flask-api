@@ -1,15 +1,15 @@
 #!/bin/bash
 
-echo "Démarrage de l'environnement MySQL pour le stockage des tweets..."
+echo "Démarrage de l'environnement complet (MySQL + API Flask)..."
 
 # Lancer docker-compose
 docker-compose up -d
 
 # Attendre que MySQL soit prêt
-echo "Attente du démarrage de MySQL..."
-sleep 10
+echo "Attente du démarrage des services..."
+sleep 15
 
-echo "Base de données prête!"
+echo "Services prêts!"
 echo "La table 'tweets' a été créée avec la structure suivante:"
 echo "- id : Identifiant unique"
 echo "- text : Contenu du tweet"
@@ -18,4 +18,10 @@ echo "- negative : 1 si le tweet est jugé négatif, 0 sinon"
 echo "- created_at : Date de création de l'enregistrement"
 
 echo ""
-echo "Connexion à la base de données: mysql -u user -ppassword -h 127.0.0.1 tweet_sentiment"
+echo "API Flask disponible sur: http://localhost:5000"
+echo "Endpoints disponibles:"
+echo "- POST /analyze : Analyser des tweets"
+echo "- GET /tweets : Lister tous les tweets"
+echo ""
+echo "Exemple d'utilisation:"
+echo "curl -X POST http://localhost:5000/analyze -H \"Content-Type: application/json\" -d '{\"tweets\": [\"Premier tweet\", \"Deuxième tweet\"]}'"
