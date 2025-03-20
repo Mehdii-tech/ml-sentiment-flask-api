@@ -39,9 +39,25 @@ def analyze_tweets():
     try:
         data = request.get_json()
         if not data or 'tweets' not in data:
-            return jsonify({'error': 'No tweets provided'}), 400
+            return jsonify({'error': 'No tweet provided'}), 400
         
         tweets = data['tweets']
+        
+        # Check if tweets is a list
+        if not isinstance(tweets, list):
+            return jsonify({'error': 'Incorrect format. A list is expected'}), 400
+            
+        # Check if tweets list is empty
+        if len(tweets) == 0:
+            return jsonify({'error': 'Tweet list is empty'}), 400
+            
+        # Check if each tweet is a string
+        for tweet in tweets:
+            if not isinstance(tweet, str):
+                return jsonify({'error': 'Incorrect Format. Each tweet need to be a string '}), 400
+            if len(tweet.strip()) == 0:
+                return jsonify({'error': 'The tweets can\'t be empty'}), 400
+        
         results = {}
         
         # Get predictions from the model
