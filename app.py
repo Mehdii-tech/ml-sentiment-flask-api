@@ -3,7 +3,10 @@ from flask_sqlalchemy import SQLAlchemy
 import os
 from dotenv import load_dotenv
 import logging
-from sentiment_model import SentimentModel
+import time
+import pymysql
+from models.sentiment_model import SentimentModel
+from sklearn.metrics import classification_report
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -12,7 +15,14 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
+# Create models directory if it doesn't exist
+os.makedirs('models', exist_ok=True)
+logger.info("Ensuring models directory exists")
+
 app = Flask(__name__)
+
+# Disable Flask's reloader in debug mode
+app.config['USE_RELOADER'] = False
 
 # Log the database URL (masking the password)
 db_url = os.getenv('DATABASE_URL').replace('mysql://', 'mysql+pymysql://') if os.getenv('DATABASE_URL') else 'mysql+pymysql://user:password@db:3306/tweet_sentiment'
@@ -30,9 +40,102 @@ class Tweet(db.Model):
     negative = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.TIMESTAMP, server_default=db.func.current_timestamp())
 
+def check_db_connection():
+    """Check if database is ready using direct PyMySQL connection"""
+    try:
+        conn = pymysql.connect(
+            host="db",
+            user="user",
+            password="password",
+            database="tweet_sentiment"
+        )
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM tweets")
+            count = cursor.fetchone()[0]
+            conn.close()
+            return True
+    except Exception as e:
+        logger.error(f"Database connection error: {str(e)}")
+        return False
+
+def test_model_with_seed_data():
+    """Test the model with seed data and log performance metrics"""
+    try:
+        logger.info("Testing model with seed data...")
+        # Get all tweets from database
+        tweets = Tweet.query.all()
+        
+        if not tweets:
+            logger.warning("No seed data found in database for testing")
+            return
+        
+        texts = [tweet.text for tweet in tweets]
+        labels = [1 if tweet.positive else 0 for tweet in tweets]
+        
+        # Get predictions
+        predictions = sentiment_model.predict(texts)
+        predictions_binary = [1 if p > 0.5 else 0 for p in predictions]
+        
+        # Log performance metrics
+        logger.info("\nModel Performance on Seed Data:")
+        logger.info(classification_report(labels, predictions_binary))
+        
+        # Log some example predictions
+        logger.info("\nExample Predictions:")
+        for text, true_label, pred, pred_score in zip(texts[:3], labels[:3], predictions_binary[:3], predictions[:3]):
+            logger.info(f"\nText: {text}")
+            logger.info(f"True Label: {'Positive' if true_label == 1 else 'Negative'}")
+            logger.info(f"Predicted: {'Positive' if pred == 1 else 'Negative'} (Score: {pred_score:.2f})")
+            
+    except Exception as e:
+        logger.error(f"Error testing model: {str(e)}")
+
+def initialize_model():
+    """Initialize and train the model if needed"""
+    try:
+        # First try to load the latest model
+        logger.info("Attempting to load latest model...")
+        if sentiment_model.load_latest_model():
+            logger.info("Successfully loaded existing model")
+            return True
+            
+        # If no model exists, train a new one with seed data (first launch only)
+        logger.info("No existing model found. Training new model with seed data...")
+        if sentiment_model.train_model():
+            logger.info("Model trained successfully with seed data")
+            test_model_with_seed_data()  # Only test after initial training
+            return True
+        else:
+            logger.error("Failed to train model with seed data")
+            return False
+        
+    except Exception as e:
+        logger.error(f"Error during model initialization: {str(e)}")
+        return False
+
 # Initialize the sentiment model
 sentiment_model = SentimentModel()
-sentiment_model.load_latest_model()
+
+# Create tables and initialize model on startup
+with app.app_context():
+    logger.info("Starting application initialization...")
+    
+    # Check database connection
+    if not check_db_connection():
+        logger.error("Failed to connect to database. Exiting...")
+        exit(1)
+    
+    logger.info("Database connection successful!")
+    logger.info("Creating database tables...")
+    db.create_all()
+    logger.info("Database tables created successfully")
+    
+    # Initialize and test model
+    if not initialize_model():
+        logger.error("Failed to initialize model. Exiting...")
+        exit(1)
+    
+    logger.info("Application initialization completed successfully")
 
 @app.route('/analyze', methods=['POST'])
 def analyze_tweets():
@@ -40,6 +143,12 @@ def analyze_tweets():
         data = request.get_json()
         if not data or 'tweets' not in data:
             return jsonify({'error': 'No tweet provided'}), 400
+        
+        # Ensure we have a model loaded
+        if not sentiment_model.is_model_loaded():
+            logger.info("Loading latest model for prediction...")
+            if not sentiment_model.load_latest_model():
+                return jsonify({'error': 'No trained model available'}), 500
         
         tweets = data['tweets']
         
@@ -61,33 +170,28 @@ def analyze_tweets():
         results = {}
         
         # Get predictions from the model
+        logger.info(f"Making predictions for {len(tweets)} tweets...")
         predictions = sentiment_model.predict(tweets)
         
+        # Process predictions and store in database
         for tweet, prediction in zip(tweets, predictions):
-            logger.info(f"Processing tweet: {tweet}")
-            
             # Convert prediction to sentiment score (-1 to 1)
             sentiment_score = (prediction * 2) - 1
             
-            # Determine positive/negative based on prediction
-            is_positive = prediction > 0.5
-            is_negative = prediction < 0.5
-            
+            # Store simple score in results
             results[tweet] = round(sentiment_score, 2)
             
-            # Store in database with correct labels
+            # Store in database
             new_tweet = Tweet(
                 text=tweet,
-                positive=is_positive,
-                negative=is_negative
+                positive=prediction > 0.5,
+                negative=prediction < 0.5
             )
             db.session.add(new_tweet)
-            logger.info(f"Added tweet to session with sentiment score: {sentiment_score}")
         
-        logger.info("Committing to database...")
+        # Commit to database
         db.session.commit()
         
-        logger.info("Successfully committed to database")
         return jsonify(results)
     except Exception as e:
         logger.error(f"Error processing tweets: {str(e)}")
@@ -112,11 +216,5 @@ def get_tweets():
         logger.error(f"Error fetching tweets: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-# Create tables on startup
-with app.app_context():
-    logger.info("Creating database tables...")
-    db.create_all()
-    logger.info("Database tables created successfully")
-
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True) 
+    app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False) 

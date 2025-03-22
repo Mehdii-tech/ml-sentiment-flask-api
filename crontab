@@ -1,0 +1,8 @@
+# Set PATH environment variable
+PATH=/usr/local/bin:/usr/bin:/bin
+
+# Test schedule: Run at 3:10 PM on Sunday
+10 17 * * 0 . /etc/environment && cd /app && python3 scheduler.py >> /var/log/cron.log 2>&1
+
+# Empty line at the end is required
+

@@ -20,6 +20,7 @@ class SentimentModel:
     def __init__(self):
         self.vectorizer = CountVectorizer(max_features=100)
         self.model = LogisticRegression()
+        self._is_loaded = False
         self.french_stopwords = [
             "le", "la", "les", "un", "une", "des", "du", "de", "dans", "et", "en", "au",
             "aux", "avec", "ce", "ces", "pour", "par", "sur", "pas", "plus", "où", "mais",
@@ -82,6 +83,7 @@ class SentimentModel:
             
             # Sauvegarde du modèle
             self.save_model()
+            self._is_loaded = True
             
             return True
             
@@ -92,6 +94,11 @@ class SentimentModel:
     def predict(self, texts):
         """Prédit le sentiment pour une liste de textes"""
         try:
+            if not self._is_loaded:
+                logger.warning("Model not loaded. Attempting to load latest model...")
+                if not self.load_latest_model():
+                    raise Exception("No model available for prediction")
+                
             cleaned_texts = [self.clean_text(text) for text in texts]
             vectors = self.vectorizer.transform(cleaned_texts)
             predictions = self.model.predict_proba(vectors)
@@ -117,21 +124,38 @@ class SentimentModel:
     def load_latest_model(self):
         """Charge le dernier modèle sauvegardé"""
         try:
+            # Check if models directory exists
+            if not os.path.exists('models'):
+                logger.info("Models directory does not exist")
+                return False
+
             model_files = sorted([f for f in os.listdir('models') if f.startswith('sentiment_model_')])
             vectorizer_files = sorted([f for f in os.listdir('models') if f.startswith('vectorizer_')])
             
-            if model_files and vectorizer_files:
-                latest_model = os.path.join('models', model_files[-1])
-                latest_vectorizer = os.path.join('models', vectorizer_files[-1])
-                
-                self.model = joblib.load(latest_model)
-                self.vectorizer = joblib.load(latest_vectorizer)
-                logger.info("Modèle chargé avec succès")
-                return True
-            return False
+            if not (model_files and vectorizer_files):
+                logger.info("No existing model files found")
+                return False
+
+            latest_model = os.path.join('models', model_files[-1])
+            latest_vectorizer = os.path.join('models', vectorizer_files[-1])
+            
+            logger.info(f"Loading model from: {latest_model}")
+            logger.info(f"Loading vectorizer from: {latest_vectorizer}")
+            
+            self.model = joblib.load(latest_model)
+            self.vectorizer = joblib.load(latest_vectorizer)
+            self._is_loaded = True
+            logger.info("Model loaded successfully")
+            return True
+            
         except Exception as e:
-            logger.error(f"Erreur lors du chargement du modèle : {str(e)}")
+            logger.error(f"Error loading model: {str(e)}")
+            self._is_loaded = False
             return False
+
+    def is_model_loaded(self):
+        """Check if the model is loaded and ready for predictions"""
+        return self._is_loaded
 
 if __name__ == "__main__":
     # Test du modèle
