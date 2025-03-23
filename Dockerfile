@@ -15,6 +15,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of your application code
 COPY . .
 
+# Make sure scheduler.py has execute permissions
+RUN chmod +x scheduler.py
+
 # Copy your crontab file into the proper location
 COPY crontab /etc/cron.d/model-retraining
 RUN chmod 0644 /etc/cron.d/model-retraining
@@ -23,6 +26,9 @@ RUN crontab /etc/cron.d/model-retraining
 # Copy your updated entrypoint.sh into the container and make it executable
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
+
+# Create directory for models if it doesn't exist
+RUN mkdir -p /app/models && chmod 777 /app/models
 
 # Expose the port your app runs on
 EXPOSE 5000

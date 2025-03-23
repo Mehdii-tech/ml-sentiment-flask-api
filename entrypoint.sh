@@ -1,8 +1,15 @@
 #!/bin/bash
 set -e
 
-# Export environment variables so cron can source them
-env | grep -v "PATH\|HOME\|TERM" > /etc/environment
+# Export environment variables so cron can source them 
+# More comprehensive environment handling
+printenv | sed 's/=\(.*\)/="\1"/' > /etc/environment
+
+# Create log file if it doesn't exist
+mkdir -p /tmp
+touch /tmp/scheduler.log
+chmod 0666 /tmp/scheduler.log
+echo "$(date) - Entrypoint script started" >> /tmp/scheduler.log
 
 echo "Waiting for MySQL to be ready..."
 
@@ -59,19 +66,16 @@ while ! test_mysql; do
     sleep 5
 done
 
-echo "MySQL is ready!"
+echo "MySQL is ready!" 
+echo "$(date) - MySQL is ready" >> /tmp/scheduler.log
 
-# Create (or ensure) the cron log file exists
-touch /var/log/cron.log
+# Start cron service
+service cron start
+echo "Cron service started"
+echo "$(date) - Cron service started" >> /tmp/scheduler.log
 
-# Start cron daemon in the background
-cron
+# Start your application
+python3 app.py & 
 
-# Log a startup message (this will appear in /var/log/cron.log)
-echo "ML container started. Cron job scheduled and Flask app starting..." >> /var/log/cron.log
-
-# Start your Flask app in the background (its output goes to the same log)
-python app.py >> /var/log/cron.log 2>&1 &
-
-# Tail the log file to keep the container alive
-tail -f /var/log/cron.log
+# Output logs to stdout
+tail -f /tmp/scheduler.log
