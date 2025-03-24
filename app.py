@@ -73,8 +73,10 @@ def test_model_with_seed_data():
         labels = [1 if tweet.positive else 0 for tweet in tweets]
         
         # Get predictions
-        predictions = sentiment_model.predict(texts)
-        predictions_binary = [1 if p > 0.5 else 0 for p in predictions]
+        sentiment_scores = sentiment_model.predict(texts)
+        
+        # Convert scores to binary labels for performance metrics
+        predictions_binary = [1 if score > 0 else 0 for score in sentiment_scores]
         
         # Log performance metrics
         logger.info("\nModel Performance on Seed Data:")
@@ -82,10 +84,11 @@ def test_model_with_seed_data():
         
         # Log some example predictions
         logger.info("\nExample Predictions:")
-        for text, true_label, pred, pred_score in zip(texts[:3], labels[:3], predictions_binary[:3], predictions[:3]):
+        for text, true_label, pred, score in zip(texts[:3], labels[:3], predictions_binary[:3], sentiment_scores[:3]):
+            sentiment_str = f"Positif ({score:.2f})" if score > 0 else f"Négatif ({score:.2f})"
             logger.info(f"\nText: {text}")
             logger.info(f"True Label: {'Positive' if true_label == 1 else 'Negative'}")
-            logger.info(f"Predicted: {'Positive' if pred == 1 else 'Negative'} (Score: {pred_score:.2f})")
+            logger.info(f"Predicted: {sentiment_str}")
             
     except Exception as e:
         logger.error(f"Error testing model: {str(e)}")
@@ -171,21 +174,21 @@ def analyze_tweets():
         
         # Get predictions from the model
         logger.info(f"Making predictions for {len(tweets)} tweets...")
-        predictions = sentiment_model.predict(tweets)
+        sentiment_scores = sentiment_model.predict(tweets)
         
         # Process predictions and store in database
-        for tweet, prediction in zip(tweets, predictions):
-            # Convert prediction to sentiment score (-1 to 1)
-            sentiment_score = (prediction * 2) - 1
+        for tweet, score in zip(tweets, sentiment_scores):
+            # Le score est déjà entre -1 et 1
+            sentiment_score = float(score)
             
-            # Store simple score in results
+            # Store score in results (arrondi à 2 décimales)
             results[tweet] = round(sentiment_score, 2)
             
-            # Store in database
+            # Store in database (on définit positif/négatif basé sur le score)
             new_tweet = Tweet(
                 text=tweet,
-                positive=prediction > 0.5,
-                negative=prediction < 0.5
+                positive=sentiment_score > 0,
+                negative=sentiment_score < 0
             )
             db.session.add(new_tweet)
         

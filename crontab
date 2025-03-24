@@ -3,7 +3,7 @@ PATH=/usr/local/bin:/usr/bin:/bin
 SHELL=/bin/bash
 BASH_ENV=/etc/environment
 
-# Run every 5 minutes for testing purposes
-*/5 * * * * cd /app && echo "$(date) - Cron job starting" >> /tmp/scheduler.log 2>&1 && /usr/local/bin/python3 /app/scheduler.py >> /tmp/scheduler.log 2>&1
+# Run every 10 minutes for testing purposes
+*/10 * * * * cd /app && echo "$(date) - Cron job starting" >> /tmp/scheduler.log 2>&1 && /usr/local/bin/python3 /app/scheduler.py >> /tmp/scheduler.log 2>&1
 
 # Empty line at the end is required
