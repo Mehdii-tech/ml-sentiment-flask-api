@@ -22,11 +22,15 @@ class SentimentModel:
         self.model = LogisticRegression()
         self._is_loaded = False
         self.french_stopwords = [
-            "le", "la", "les", "un", "une", "des", "du", "de", "dans", "et", "en", "au",
-            "aux", "avec", "ce", "ces", "pour", "par", "sur", "pas", "plus", "où", "mais",
-            "ou", "donc", "ni", "car", "ne", "que", "qui", "quoi", "quand", "à", "son",
-            "sa", "ses", "ils", "elles", "nous", "vous", "est", "sont", "cette", "cet",
-            "aussi", "être", "avoir", "faire", "comme", "tout", "bien", "mal", "on", "lui"
+           "le", "la", "les", "aux", "avec", "ce", "ces", "dans", "de", "des", "du",
+            "elle", "en", "et", "eux", "il", "je", "la", "le", "leur", "lui", "ma",
+            "mais", "me", "même", "mes", "moi", "mon", "ni", "notre", "nous", "on",
+            "ou", "par", "pas", "pour", "qu", "que", "qui", "sa", "se", "ses", "son",
+            "sur", "ta", "te", "tes", "toi", "ton", "tu", "un", "une", "vos", "votre",
+            "vous", "c", "d", "j", "l", "à", "m", "n", "s", "t", "y", "été", "étée",
+            "étées", "étés", "étant", "suis", "es", "est", "sommes", "êtes", "sont",
+            "serai", "seras", "sera", "serons", "serez", "seront", "serais", "serait",
+            "serions", "seriez", "seraient"
         ]
         
     def clean_text(self, text):
@@ -41,7 +45,7 @@ class SentimentModel:
         db_url = os.getenv('DATABASE_URL').replace('mysql://', 'mysql+pymysql://')
         engine = create_engine(db_url)
         
-        query = "SELECT text, positive FROM tweets"
+        query = "SELECT text, positive, negative FROM tweets"
         df = pd.read_sql(query, engine)
         return df
 
@@ -60,10 +64,17 @@ class SentimentModel:
             logger.info("Nettoyage des textes...")
             df['text_clean'] = df['text'].apply(self.clean_text)
             
+            # Création d'un score de sentiment composite (1 = positif, 0 = neutre, -1 = négatif)
+            logger.info("Création du score de sentiment composite...")
+            df['sentiment_score'] = df.apply(
+                lambda row: 1 if row['positive'] == 1 else (-1 if row['negative'] == 1 else 0), 
+                axis=1
+            )
+            
             # Vectorisation
             logger.info("Vectorisation des textes...")
             X = self.vectorizer.fit_transform(df['text_clean'])
-            y = df['positive']
+            y = df['sentiment_score']  # Utilise le score composite au lieu de juste 'positive'
             
             # Division des données
             X_train, X_test, y_train, y_test = train_test_split(
@@ -101,9 +112,35 @@ class SentimentModel:
                 
             cleaned_texts = [self.clean_text(text) for text in texts]
             vectors = self.vectorizer.transform(cleaned_texts)
-            predictions = self.model.predict_proba(vectors)
-            # Retourne la probabilité de la classe positive (score entre 0 et 1)
-            return predictions[:, 1]
+            
+            # Prédiction du score de sentiment avec probability
+            probas = self.model.predict_proba(vectors)
+            
+            # Calculer un score continu entre -1 et 1
+            results = []
+            
+            for proba in probas:
+                # Si modèle multiclasse (-1, 0, 1)
+                if len(proba) == 3:
+                    # Calcul pondéré: proba_neg*-1 + proba_neu*0 + proba_pos*1
+                    # Classes triées: -1, 0, 1 ou 0, 1, 2 (selon l'ordre des classes)
+                    classes = self.model.classes_
+                    score = 0
+                    
+                    for i, class_val in enumerate(classes):
+                        if class_val == -1 or class_val == 0:  # classe négative
+                            score -= proba[i]
+                        elif class_val == 1 or class_val == 2:  # classe positive
+                            score += proba[i]
+                    
+                    results.append(score)
+                # Si modèle binaire (0, 1)    
+                else:
+                    # Transformer la probabilité [0,1] en score [-1,1]
+                    score = (proba[1] * 2) - 1
+                    results.append(score)
+                
+            return results
         except Exception as e:
             logger.error(f"Erreur lors de la prédiction : {str(e)}")
             return None
