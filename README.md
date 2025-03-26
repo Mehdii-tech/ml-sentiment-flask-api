@@ -120,4 +120,4 @@ docker-compose up --build
 
 ## Maintenance
 
-Les modèles sont automatiquement réentraînés selon le planning défini dans le fichier crontab. Seules les 3 versions les plus récentes des modèles sont conservées pour économiser de l'espace disque.```
+Les modèles sont automatiquement réentraînés selon le planning défini dans le fichier crontab. Seules les 3 versions les plus récentes des modèles sont conservées pour économiser de l'espace disque.
