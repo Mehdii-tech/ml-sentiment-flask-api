@@ -1,4 +1,4 @@
-```# API d'Analyse de Sentiment pour Tweets
+# API d'Analyse de Sentiment pour Tweets
 
 Cette API Flask analyse le sentiment des tweets et stocke les résultats dans une base de données MySQL. L'application utilise un modèle de machine learning pour déterminer si un tweet est positif ou négatif.
 
