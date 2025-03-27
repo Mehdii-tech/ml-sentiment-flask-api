@@ -25,4 +25,11 @@ INSERT INTO tweets (text, positive, negative) VALUES
 (N'Bug constant, application inutilisable, je désinstalle.', 0, 1),
 (N'Excellente initiative, continuez comme ça !', 1, 0),
 (N'Interface intuitive et agréable, bravo !', 1, 0),
+(N'La nouvelle version résout tous les problèmes que j\'avais avant, merci !', 1, 0),
+(N'Produit livré en retard et endommagé, je suis furieux.', 0, 1),
+(N'Équipe réactive et professionnelle, c\'est un plaisir de travailler avec vous.', 1, 0),
+(N'Les délais sont respectés et la qualité est au rendez-vous.', 1, 0), 
+(N'Application lente et bourrée de publicités, insupportable.', 0, 1),
+(N'Service client à l\'écoute qui a résolu mon problème rapidement.', 1, 0),
+(N'Contenu intéressant mais trop d\'erreurs dans le texte.', 0, 1),
 (N'Service catastrophique, à éviter absolument.', 0, 1);
